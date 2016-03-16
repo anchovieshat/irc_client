@@ -1,8 +1,6 @@
 #![feature(lookup_host)]
 
-use std::io::BufReader;
 use std::io;
-use std::net;
 use std::net::TcpStream;
 use std::time::Duration;
 use std::thread;
@@ -13,23 +11,22 @@ use client::*;
 
 fn main() {
 	let addr = lookup_addr("who");
-	let mut stream = TcpStream::connect(addr.as_str()).unwrap();
+	let stream = TcpStream::connect(addr.as_str()).unwrap();
 	stream.set_read_timeout(Some(Duration::from_millis(50))).unwrap();
 	stream.set_write_timeout(Some(Duration::from_secs(1))).unwrap();
 
 	let stream_ref = RwLock::new(stream);
 	let stream_arc = Arc::new(stream_ref);
-	let mut cur_channel = String::new();
 
 	println!("Connected!");
 	let local_arc = stream_arc.clone();
 
 	//pass("asdf", &mut local_arc.write().unwrap());
 	nick(Some("cloin"), &mut local_arc.write().unwrap());
-	user("guest 0 * :Colin", &mut local_arc.write().unwrap());
+	user(Some("guest 0 * :Colin"), &mut local_arc.write().unwrap());
 
 	let stream_lock = stream_arc.clone();
-	let child = thread::spawn(move || {
+	thread::spawn(move || {
 		loop {
 			let reader = stream_lock.read().unwrap();
 			read_response(&reader);
@@ -41,8 +38,7 @@ fn main() {
 		let mut input = String::new();
 		let res = io::stdin().read_line(&mut input).ok();
 		if res.is_some() {
-			let input_c = input.clone();
-			let mut input_v: Vec<&str> = input.split_whitespace().collect();
+			let input_v: Vec<&str> = input.split_whitespace().collect();
 			let t_input_v = input_v.clone();
 			let tmp_input = t_input_v.get(0);
 			let optional = t_input_v.get(1);
@@ -57,6 +53,7 @@ fn main() {
 				input_c = *tmp_input.unwrap();
 				if input_c.chars().nth(0).unwrap() == '/' {
 					match input_c {
+						"/pass" => { pass(option, &mut local_arc.write().unwrap()); },
 						"/quit" => { quit(option, &mut local_arc.write().unwrap()); break; },
 						"/ping" => { ping(option, &mut local_arc.write().unwrap()); },
 						"/who" => { who(option, &mut local_arc.write().unwrap()); },

@@ -22,7 +22,7 @@ pub fn lookup_addr(site_name: &str) -> String {
 	return addr;
 }
 pub fn read_response(stream: &TcpStream) {
-	let mut r = BufReader::new(stream);
+	let r = BufReader::new(stream);
 	for line in r.lines() {
 		let line = line.ok();
 		if line.is_some() {
@@ -91,12 +91,22 @@ pub fn join(channel: Option<&str>, client: &mut Client, stream: &mut TcpStream) 
 	}
 }
 
-pub fn pass(pass: &str, stream: &mut TcpStream) {
-	stream.write(irc_command("PASS", Some(pass)).as_bytes()).unwrap();
+pub fn pass(pass: Option<&str>, stream: &mut TcpStream) {
+	if pass.is_some() {
+		let pass = pass.unwrap();
+		stream.write(irc_command("PASS", Some(pass)).as_bytes()).unwrap();
+	} else {
+		println!("No pass specified!");
+	}
 }
 
-pub fn user(user_type: &str, stream: &mut TcpStream) {
-	stream.write(irc_command("USER", Some(user_type)).as_bytes()).unwrap();
+pub fn user(user: Option<&str>, stream: &mut TcpStream) {
+	if user.is_some() {
+		let user = user.unwrap();
+		stream.write(irc_command("USER", Some(user)).as_bytes()).unwrap();
+	} else {
+		println!("No user specified!");
+	}
 }
 
 pub fn time(addr: Option<&str>, stream: &mut TcpStream) {
