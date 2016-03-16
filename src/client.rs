@@ -9,7 +9,7 @@ pub fn lookup_addr(site_name: &str) -> String {
 	let mut addr;
 	if !table.is_some() {
 		addr = String::from("0.0.0.0:6667");
-		println!("invalid address: \"{}\"", site_name);
+		println!("invalid address: {}", site_name);
 		println!("using default: {}", addr);
 		return addr;
 	}
@@ -21,12 +21,13 @@ pub fn lookup_addr(site_name: &str) -> String {
 	println!("{}: {}", site_name, addr);
 	return addr;
 }
-pub fn read_response(stream: &TcpStream) {
+pub fn read_response(stream: &mut TcpStream) {
 	let r = BufReader::new(stream);
 	for line in r.lines() {
 		let line = line.ok();
 		if line.is_some() {
-			println!("{}", line.unwrap());
+			let line = line.unwrap();
+			println!("{}", line);
 		} else {
 			break;
 		}
@@ -48,7 +49,7 @@ pub fn quit(why: Option<&str>, stream: &mut TcpStream) {
 	if why.is_some() {
 		let mut fmt_why = String::from(":");
 		fmt_why.push_str(why.unwrap());
-		stream.write(irc_command("QUIT", Some(why.unwrap())).as_bytes()).unwrap();
+		stream.write(irc_command("QUIT", Some(fmt_why.as_str())).as_bytes()).unwrap();
 	} else {
 		stream.write(irc_command("QUIT", None).as_bytes()).unwrap();
 	}
@@ -60,6 +61,15 @@ pub fn ping(addr: Option<&str>, stream: &mut TcpStream) {
 		stream.write(irc_command("PING", Some(addr)).as_bytes()).unwrap();
 	} else {
 		stream.write(irc_command("PING", Some("0.0.0.0")).as_bytes()).unwrap();
+	}
+}
+
+pub fn pong(addr: Option<&str>, stream: &mut TcpStream) {
+	if addr.is_some() {
+		let addr = addr.unwrap();
+		stream.write(irc_command("PONG", Some(addr)).as_bytes()).unwrap();
+	} else {
+		stream.write(irc_command("PONG", Some("0.0.0.0")).as_bytes()).unwrap();
 	}
 }
 
