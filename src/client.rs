@@ -6,6 +6,8 @@ use std::net::TcpStream;
 use std::sync::{RwLock, Arc};
 use std::time::Duration;
 
+use term;
+
 pub fn lookup_addr(site_name: &str) -> String {
 	let table = net::lookup_host(site_name).ok();
 	let mut addr;
@@ -71,8 +73,8 @@ impl Client {
 		}
 	}
 
-	pub fn set_channel(&mut self, channel: &String) {
-		self.cur_channel = Some(channel.clone());
+	pub fn set_channel(&mut self, channel: Option<String>) {
+		self.cur_channel = channel.clone();
 	}
 
 	pub fn say(&mut self, message: &str) {
@@ -105,16 +107,36 @@ impl Client {
 	}
 
 	pub fn handle_response(conn: &mut TcpStream, buffer: &mut Vec<String>) {
+		let mut t = term::stdout().unwrap();
 		let r = BufReader::new(conn);
 		for line in r.lines() {
 			let line = line.ok();
 			if line.is_some() {
 				let line = line.unwrap();
-				println!("{}", line);
+				let line_cpy = line.clone();
+				let parts: Vec<&str> = line_cpy.split_whitespace().collect();
+				let type_id_part = parts.get(1);
+				if type_id_part.is_some() {
+					let type_id_str = type_id_part.unwrap();
+					let type_id = type_id_str.parse::<u16>().ok();
+					if type_id.is_some() {
+						let type_id = type_id.unwrap();
+						if type_id < 300 {
+							t.fg(term::color::RED).unwrap();
+						} if type_id == 322 {
+							t.fg(term::color::GREEN).unwrap();
+						} else {
+							t.fg(term::color::BLUE).unwrap();
+						}
+					}
+				}
+				writeln!(t, "{}", line).unwrap();
+				t.reset().unwrap();
 				buffer.push(line);
 			} else {
 				break;
 			}
 		}
+		t.reset().unwrap();
 	}
 }

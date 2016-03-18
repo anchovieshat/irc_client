@@ -1,17 +1,15 @@
 #![feature(lookup_host)]
 
+mod client;
+
+extern crate term;
+
 use std::io;
 use std::thread;
-use std::sync::{RwLock, Arc};
-use std::time::Duration;
 
-mod client;
 use client::*;
 
 fn main() {
-	println!("+---------+");
-	println!("| IRC FUN |");
-	println!("+---------+");
 	println!("Where should I connect to?");
 	let mut input = String::new();
 	let res = io::stdin().read_line(&mut input).ok();
@@ -36,33 +34,46 @@ fn main() {
 		}
 	});
 
+	let stdin = io::stdin();
 	loop {
 		let mut input = String::new();
-		let res = io::stdin().read_line(&mut input).ok();
+		let res = stdin.read_line(&mut input).ok();
 		if res.is_some() {
 			let line = input.trim();
 			if line.contains("/") {
 				let tmp_line = String::from(line);
-				let mut parts: Vec<&str> = tmp_line.split_whitespace().collect();
+				let parts: Vec<&str> = tmp_line.split_whitespace().collect();
 				let line = line.to_uppercase();
 				if line == "/QUIT" {
 					client.send_command("QUIT", None);
 					println!("Quitting!");
 					return;
-				} if line.contains("/SET") {
+				} else if line.contains("/SET") {
+					println!("SETTING");
 					let tmp_channel = parts.get(1);
 					if tmp_channel.is_some() {
 						let channel = String::from(*tmp_channel.unwrap());
-						client.set_channel(&channel);
+						client.set_channel(Some(channel));
 					} else {
 						println!("Channel not yet set!");
 					}
-				} if line.contains("/JOIN") {
+				} else if line.contains("/JOIN") {
 					let tmp_channel = parts.get(1);
 					if tmp_channel.is_some() {
 						let channel = String::from(*tmp_channel.unwrap());
-						client.set_channel(&channel);
-						client.send_command("JOIN", Some(channel));
+						let channel_clone = channel.clone();
+						client.set_channel(Some(channel));
+						client.send_command("JOIN", Some(channel_clone));
+					} else {
+						println!("Channel not yet set!");
+					}
+				} else if line.contains("/PART") {
+					let tmp_channel = parts.get(1);
+					if tmp_channel.is_some() {
+						let channel = String::from(*tmp_channel.unwrap());
+						let channel_clone = channel.clone();
+						client.set_channel(None);
+						client.send_command("PART", Some(channel_clone));
 					} else {
 						println!("Channel not yet set!");
 					}
