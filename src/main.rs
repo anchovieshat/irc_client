@@ -1,10 +1,9 @@
 #![feature(lookup_host)]
 
 use std::io;
-use std::net::TcpStream;
-use std::time::Duration;
 use std::thread;
 use std::sync::{RwLock, Arc};
+use std::time::Duration;
 
 mod client;
 use client::*;
@@ -19,110 +18,76 @@ fn main() {
 
 	let address_name;
 	if res.is_some() {
-		address_name = input.trim();
+		address_name = String::from(input.trim());
 	} else {
-		address_name = "0.0.0.0:6667";
+		address_name = String::from("0.0.0.0:6667");
 	}
 
-	let addr = lookup_addr(address_name);
-	let valid_conn = TcpStream::connect(addr.as_str()).ok();
-	let stream;
-	if valid_conn.is_some() {
-		stream = valid_conn.unwrap();
-		println!("Address verified!");
-	} else {
-		println!("Connection to {} failed", addr);
-		return;
-	}
-	stream.set_read_timeout(Some(Duration::from_millis(500))).unwrap();
-	stream.set_write_timeout(Some(Duration::from_secs(1))).unwrap();
+	let mut client = Client::new(&address_name);
 
-	let stream_ref = RwLock::new(stream);
-	let stream_arc = Arc::new(stream_ref);
-
-	println!("Connected!");
-	let local_arc = stream_arc.clone();
-
-	//pass("asdf", &mut local_arc.write().unwrap());
-	nick(Some("cloin"), &mut local_arc.write().unwrap());
-	user(Some("guest 0 * :Colin"), &mut local_arc.write().unwrap());
-
-	let stream_lock = stream_arc.clone();
+	let conn_arc = client.connection.clone();
+	let buffer_arc = client.view_buffer.clone();
+	// Poll for server updates
 	thread::spawn(move || {
 		loop {
-			let mut handler = stream_lock.write().unwrap();
-			read_response(&mut handler);
+			let mut conn = conn_arc.write().unwrap();
+			let mut buffer = buffer_arc.write().unwrap();
+			Client::handle_response(&mut conn, &mut buffer);
 		}
 	});
 
-	let mut client = Client::new();
 	loop {
 		let mut input = String::new();
 		let res = io::stdin().read_line(&mut input).ok();
 		if res.is_some() {
-			let input_v: Vec<&str> = input.split_whitespace().collect();
-			let t_input_v = input_v.clone();
-			let tmp_input = t_input_v.get(0);
-			let optional = t_input_v.get(1);
-			let option;
-			if optional.is_some() {
-				option = Some(*optional.unwrap());
-			} else {
-				option = None;
-			}
-			let input_c;
-			if tmp_input.is_some() {
-				input_c = *tmp_input.unwrap();
-				if input_c.chars().nth(0).unwrap() == '/' {
-					match input_c {
-						"/pass" => { pass(option, &mut local_arc.write().unwrap()); },
-						"/quit" => {
-							let mut input = String::new();
-							let mut input_v = input_v.clone();
-							input_v.remove(0);
-							for string in input_v.iter() {
-								input.push_str(string);
-								input.push(' ');
-							}
-							quit(Some(input.as_str()), &mut local_arc.write().unwrap()); break;
-						},
-						"/ping" => { ping(option, &mut local_arc.write().unwrap()); },
-						"/pong" => { pong(option, &mut local_arc.write().unwrap()); },
-						"/who" => { who(option, &mut local_arc.write().unwrap()); },
-						"/nick" => { nick(option, &mut local_arc.write().unwrap()); },
-						"/join" => { join(option, &mut client, &mut local_arc.write().unwrap()); },
-						"/time" => { time(option, &mut local_arc.write().unwrap()); },
-						"/list" => { list(option, &mut local_arc.write().unwrap()); },
-						"/pm" => {
-							let mut input = String::new();
-							let mut input_v = input_v.clone();
-							input_v.remove(0);
-							input_v.remove(0);
-							for string in input_v.iter() {
-								input.push_str(string);
-								input.push(' ');
-							}
-							priv_msg(option, Some(input.as_str()), &mut local_arc.write().unwrap());
-						},
-						"/set" => { client.set_channel(option); },
-						_ => { println!("unrecognized command: {:?}", input_c); },
+			let line = input.trim();
+			if line.contains("/") {
+				let tmp_line = String::from(line);
+				let mut parts: Vec<&str> = tmp_line.split_whitespace().collect();
+				let line = line.to_uppercase();
+				if line == "/QUIT" {
+					client.send_command("QUIT", None);
+					println!("Quitting!");
+					return;
+				} if line.contains("/SET") {
+					let tmp_channel = parts.get(1);
+					if tmp_channel.is_some() {
+						let channel = String::from(*tmp_channel.unwrap());
+						client.set_channel(&channel);
+					} else {
+						println!("Channel not yet set!");
+					}
+				} if line.contains("/JOIN") {
+					let tmp_channel = parts.get(1);
+					if tmp_channel.is_some() {
+						let channel = String::from(*tmp_channel.unwrap());
+						client.set_channel(&channel);
+						client.send_command("JOIN", Some(channel));
+					} else {
+						println!("Channel not yet set!");
 					}
 				} else {
-					let channel = client.cur_channel.clone();
-					if channel.is_some() {
-						let channel = channel.clone();
-						let channel_t = channel.unwrap();
-						priv_msg(Some(channel_t.as_str()), Some(input.as_str()), &mut local_arc.write().unwrap());
+					let command = parts[0].trim_left_matches("/");
+					let mut tmp_parts = parts.clone();
+					tmp_parts.remove(0);
+					if parts.len() > 0 {
+						let mut new_line = String::new();
+						for part in tmp_parts.iter() {
+							new_line.push_str(part);
+							new_line.push(' ');
+						}
+						client.send_command(command, Some(new_line));
 					} else {
-						println!("Channel not yet selected!");
+						client.send_command(command, None);
 					}
 				}
 			} else {
-				println!("malformed input!");
+				if client.cur_channel.is_some() {
+					client.say(&line);
+				} else {
+					println!("Need to set a channel first!");
+				}
 			}
-
-		} else {
-			println!("invalid input!");
 		}
 	}
 }
